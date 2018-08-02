@@ -1,6 +1,1 @@
 token: <your bot token>
-users:
-  - name: <a name for the user>
-    key: <api v1 key>
-  - name: <a name for the user>
-    key: <api v1 key>
