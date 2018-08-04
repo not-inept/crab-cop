@@ -65,7 +65,7 @@ async def on_message(message):
                 response += "\n\t%d vocab words seen" % totalVocab(srs)
                 response += "\n\tlessons available: %d" % stud.lessons_available
                 response += "\n\treviews available: %d" % stud.reviews_available
-                respones += "\n"
+                response += "\n"
             await client.send_message(message.channel, response)
     elif message.content.startswith("!register"):
         if message.author.id in users:
