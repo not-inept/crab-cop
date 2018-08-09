@@ -11,6 +11,9 @@ users = shelve.open("users.shelf")
 def totalVocab(srs):
     return srs.apprentice.vocabulary + srs.burned.vocabulary + srs.enlighten.vocabulary + srs.guru.vocabulary + srs.master.vocabulary
 
+def totalSrs(srs):
+    return srs.apprentice.total + srs.burned.total + srs.enlighten.total + srs.guru.total + srs.master.total
+
 def loadChannels():
     client.get_channel
     client.get_user_info
@@ -62,9 +65,20 @@ async def on_message(message):
                 response += "**%s** is level %d with:" % (user["mention"], info.level)
                 response += "\n\t%d/%d radicals\t(%.1f)" % (prog.radicals_progress, prog.radicals_total, (prog.radicals_progress/prog.radicals_total)*100)
                 response += "\n\t%d/%d kanji\t(%.1f)" % (prog.kanji_progress, prog.kanji_total, (prog.kanji_progress/prog.kanji_total)*100)
-                response += "\n\t%d vocab words seen" % totalVocab(srs)
+                # response += "\n\t%d vocab words seen" % totalVocab(srs)
+                total_srs = totalSrs(srs)
+                response += "\n\t%d apprentice\t(%.1f)" % (srs.apprentice.total, (srs.apprentice.total/total_srs)*100)
+                response += "\n\t%d guru\t(%.1f)" % (srs.guru.total, (srs.guru.total/total_srs)*100)
+                response += "\n\t%d master\t(%.1f)" % (srs.master.total, (srs.master.total/total_srs)*100)
+                response += "\n\t%d elightened\t(%.1f)" % (srs.enlighten.total, (srs.enlighten.total/total_srs)*100)
+                response += "\n\t%d burned\t(%.1f)" % (srs.burned.total, (srs.burned.total/total_srs)*100)
+
+                
+                
                 response += "\n\tlessons available: %d" % stud.lessons_available
                 response += "\n\treviews available: %d" % stud.reviews_available
+                
+                
                 response += "\n"
             await client.send_message(message.channel, response)
     elif message.content.startswith("!register"):
