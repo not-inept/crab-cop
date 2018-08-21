@@ -2,3 +2,5 @@
 config.yml
 *.shelf
 __pycache__
+v2-test.py
+*.log

@@ -1,6 +1,7 @@
 from json import loads
 from enum import Enum
 from urllib.request import urlopen, Request
+from urllib.parse import urlencode
 
 __all__ = ['WaniKani']
 
@@ -18,7 +19,7 @@ class WaniKani(object):
             filters['page_after_id'] = after
         elif before:
             filters['page_before_id'] = before
-        filters = '&'.join([f + '=' + str(filters[f]) for f in filters])
+        filters = '&' + urlencode(filters)
         url = self.url_template.format(endpoint=endpoint, argument=argument, filters=filters)
         request = Request(url)
         request.add_header('Authorization', self.auth)   

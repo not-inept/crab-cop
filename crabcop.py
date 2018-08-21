@@ -1,22 +1,40 @@
-from crabigator.wanikani import WaniKani
+from datetime import datetime, timedelta
+from wanikani import WaniKani
 import asyncio
 import discord
+import logging
 import shelve
 import yaml
 
-registrants = shelve.open("registrants.shelf")
-channels = shelve.open("channels.shelf")
-users = shelve.open("users.shelf")
+# Init logger
+logger = logging.getLogger('crabcop')
+logger.setLevel(logging.DEBUG)
+ch = logging.FileHandler('crabcop.log')
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s|%(name)s|%(levelname)s>\t%(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
-def totalVocab(srs):
-    return srs.apprentice.vocabulary + srs.burned.vocabulary + srs.enlighten.vocabulary + srs.guru.vocabulary + srs.master.vocabulary
+# Load shelves
+registrants = shelve.open('registrants.shelf')
+channels = shelve.open('channels.shelf')
+users = shelve.open('users.shelf')
 
-def totalSrs(srs):
-    return srs.apprentice.total + srs.burned.total + srs.enlighten.total + srs.guru.total + srs.master.total
+def rankKeyFunction(user):
+    return (user['reviews_done_past_day'], user['current_level'])
 
-def loadChannels():
-    client.get_channel
-    client.get_user_info
+def buildResponse(user, current_level, reviews_done_past_day, stats, lessons_available, reviews_available, reviews_available_next_day):
+    logger.debug('Building response.')
+    response = ''
+    response += '**%s** is level %d:' % (user['mention'], current_level)
+    response += '\n\tThey\'ve done %d reviews in the last day.' % reviews_done_past_day
+    response += '\n\t%d/%d radicals\t(%.1f)' % (stats['radical']['passed'], stats['radical']['total'], (stats['radical']['passed']/stats['radical']['total'])*100)
+    response += '\n\t%d/%d kanji\t(%.1f)' % (stats['kanji']['passed'], stats['kanji']['total'], (stats['kanji']['passed']/stats['kanji']['total'])*100)
+    response += '\n\t%d/%d vocab\t(%.1f)' % (stats['vocabulary']['passed'], stats['vocabulary']['total'], (stats['vocabulary']['passed']/stats['vocabulary']['total'])*100)
+    response += '\n\tlessons available: %d' % lessons_available
+    response += '\n\treviews available: %d' % reviews_available
+    response += '\n\treviews in the next day: %d' % reviews_available_next_day
+    return response
 
 def registerWithChannel(channel_id, user_id):
         channel = []
@@ -26,19 +44,19 @@ def registerWithChannel(channel_id, user_id):
             user = users[user_id]
             channel.append(user_id)
             channels[channel_id] = channel
-            user["channels"].append(channel_id)
+            user['channels'].append(channel_id)
             users[user_id] = user
 
 def registerUser(user_obj, token):
     user = {
-        "mention": user_obj.mention,
-        "token": token,
-        "channels": [],
-        "data": {}
+        'mention': user_obj.mention,
+        'token': token,
+        'channels': [],
+        'data': {}
     }
-    users[user_obj.id] = user
+    users[str(user_obj.id)] = user
 
-config = yaml.load(open("config.yml"))
+config = yaml.load(open('config.yml'))
 
 client = discord.Client()
 
@@ -51,71 +69,101 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-    if message.content.startswith("!wani"):
-        response = ""
-        if message.channel.id in channels:
-            channel = channels[message.channel.id]
+    author_id = str(message.author.id)
+    channel_id = str(message.channel.id)
+    if message.content.startswith('!wani'):
+        if channel_id in channels:
+            start_time = datetime.now()
+            logger.debug('!wani starting at %s.' % start_time.isoformat())
+            channel = channels[channel_id]
+            one_day_ago = datetime.now() - timedelta(hours = 24)
+            responses = []
             for user_id in channel:
                 user = users[user_id]
-                wc = WaniKani(user["token"])
-                info = wc.user_information
-                prog = wc.level_progression
-                stud = wc.study_queue
-                srs = wc.srs_distribution
-                response += "**%s** is level %d with:" % (user["mention"], info.level)
-                response += "\n\t%d/%d radicals\t(%.1f)" % (prog.radicals_progress, prog.radicals_total, (prog.radicals_progress/prog.radicals_total)*100)
-                response += "\n\t%d/%d kanji\t(%.1f)" % (prog.kanji_progress, prog.kanji_total, (prog.kanji_progress/prog.kanji_total)*100)
-                # response += "\n\t%d vocab words seen" % totalVocab(srs)
-                total_srs = totalSrs(srs)
-                response += "\n\t%d apprentice\t(%.1f)" % (srs.apprentice.total, (srs.apprentice.total/total_srs)*100)
-                response += "\n\t%d guru\t(%.1f)" % (srs.guru.total, (srs.guru.total/total_srs)*100)
-                response += "\n\t%d master\t(%.1f)" % (srs.master.total, (srs.master.total/total_srs)*100)
-                response += "\n\t%d elightened\t(%.1f)" % (srs.enlighten.total, (srs.enlighten.total/total_srs)*100)
-                response += "\n\t%d burned\t(%.1f)" % (srs.burned.total, (srs.burned.total/total_srs)*100)
+                wk = WaniKani(user['token'])
+                # Get user profile
+                wk_user = wk.get_user()
+                current_level = wk_user['data']['level']
+                # Get progress summary
+                summary = wk.get_summary()
+                reviews_available = len(summary['data']['reviews'][0]['subject_ids'])
+                reviews_available_next_day = 0
+                for review in summary['data']['reviews']:
+                    reviews_available_next_day += len(review['subject_ids'])
+                lessons_available = len(summary['data']['lessons'][0]['subject_ids'])
+                # Get review stats
+                reviews = wk.get_reviews(filters={'updated_after':one_day_ago.isoformat()})
+                reviews_done_past_day = reviews['total_count']
+                # Get level assignment stats
+                assignments = wk.get_assignments(filters={'levels': current_level})
+                stats = {
+                    'kanji' : {
+                        'passed':0.0,
+                        'total':0.0
+                    },
+                    'radical' : {
+                        'passed':0.0,
+                        'total':0.0
+                    },
+                    'vocabulary' : {
+                        'passed':0.0,
+                        'total': 0.0
+                    }
+                }
+                for assignment in assignments['data']:
+                    data = assignment['data']
+                    if data['passed']:
+                        stats[data['subject_type']]['passed'] += 1
+                    stats[data['subject_type']]['total'] += 1
 
-                
-                
-                response += "\n\tlessons available: %d" % stud.lessons_available
-                response += "\n\treviews available: %d" % stud.reviews_available
-                
-                
-                response += "\n"
-            await client.send_message(message.channel, response)
-    elif message.content.startswith("!register"):
-        if message.author.id in users:
-            registerWithChannel(message.channel.id, message.author.id)
-            await client.send_message(message.channel, "You're now registered for this channel. Thanks!")
-            await client.send_message(message.author, "You're able to update your token by messaging me with `!token <api v1 token>` again.")
+                responses.append({
+                    'current_level': current_level,
+                    'reviews_done_past_day': reviews_done_past_day,
+                    'response': buildResponse(user, current_level, reviews_done_past_day, stats, lessons_available, reviews_available, reviews_available_next_day)
+                })
+            responses = sorted(responses, key=rankKeyFunction, reverse=True)
+            await message.channel.send('\n'.join([str(i+1) + '. ' + responses[i]['response'] for i in range(len(responses))]))
+            end_time = datetime.now()
+            logger.debug('!wani stopping at %s.' % end_time.isoformat())
+            logger.debug('!wani took %s' % str(end_time - start_time))
+
+    elif message.content.startswith('!register'):
+        if author_id in users:
+            registerWithChannel(channel_id, author_id)
+            await message.channel.send('You\'re now registered for this channel. Thanks!')
+            await message.author.send('You\'re able to update your token by messaging me with `!token <api v2 token>` again.')
         else:
-            response = await client.send_message(message.channel, 
-            "Please finish your registration by responding to the private message I'm about to send you.")
-            registrants[message.author.id] = (message.author, message.channel, response)
-            await client.send_message(message.author, "Please respond with `!token <api v1 token>` to add your WaniKani token to my list. You can your token at: https://www.wanikani.com/settings/account")
-            await client.edit_message(response, "Please finish your registration by responding to the private message I just sent you.")
-    elif message.content.startswith("!token") and message.channel.is_private:
+            response = await message.channel.send(
+            'Please finish your registration by responding to the private message I\'m about to send you.')
+            registrants[author_id] = (author_id, channel_id, message.channel.id, response.id)
+            await message.author.send('Please respond with `!token <api v2 token>` to add your WaniKani token to my list. You can your token at: https://www.wanikani.com/settings/account')
+            await response.edit(content='Please finish your registration by responding to the private message I just sent you.')
+    elif message.content.startswith('!token') and isinstance(message.channel, discord.abc.PrivateChannel):
         # validate argument exists (api token)
-        split_content = message.content.split(" ")
+        split_content = message.content.split(' ')
         if len(split_content) != 2:
-            await client.send_message(message.channel, "Make you sure you pass a token like: `!token <api v1 token>`")
+            await message.channel.send('Make you sure you pass a token like: `!token <api v2 token>`')
             return
         token = split_content[1]
 
-        if message.author.id in registrants:
-            response = await client.send_message(message.channel, "Thanks, I'm storing your information...")
-            registrant = registrants[message.author.id]
+        if author_id in registrants:
+            response = await message.channel.send('Thanks, I\'m storing your information...')
+            registrant = registrants[author_id]
             registerUser(message.author, token)
-            registerWithChannel(registrant[1].id, registrant[0].id)
-            await client.edit_message(response, "You're all registered!")
-            await client.edit_message(registrant[2], "Thanks for registering!")
-            await client.send_message(message.author, "You're able to update your token by messaging me with `!token <api v1 token>` again.")
-            del registrants[message.author.id]
-        elif message.author.id in users:
-            response = await client.send_message(message.channel, "Thanks, I'm updating your token...")
-            user = users[message.author.id]
-            user["token"] = token
-            users[message.author.id] = user
-            await client.edit_message(response, "Your token was updated!")
-
+            registerWithChannel(registrant[1], registrant[0])
+            await response.edit(content='You\'re all registered!')
+            original_channel = client.get_channel(registrant[2])
+            original_response = await original_channel.get_message(registrant[3])
+            await original_response.edit(content='Thanks for registering!')
+            await message.author.send('You\'re able to update your token by messaging me with `!token <api v2 token>` again.')
+            del registrants[author_id]
+        elif author_id in users:
+            response = await message.channel.send('Thanks, I\'m updating your token...')
+            user = users[author_id]
+            user['token'] = token
+            users[author_id] = user
+            await response.edit(content='Your token was updated!')
     # Add a thread that checks automatically and says nice things if stuff improves
 
-client.run(config["token"])
+logger.info('Starting up :)')
+client.run(config['token'])
