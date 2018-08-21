@@ -122,7 +122,7 @@ async def on_message(message):
                     'response': buildResponse(user, current_level, reviews_done_past_day, stats, lessons_available, reviews_available, reviews_available_next_day)
                 })
             responses = sorted(responses, key=rankKeyFunction, reverse=True)
-            await message.channel.send('\n'.join([str(i+1) + '. ' + responses[i]['response'] for i in range(len(responses))]))
+            await message.channel.send('\n' + '\n'.join([str(i+1) + '. ' + responses[i]['response'] for i in range(len(responses))]))
             end_time = datetime.now()
             logger.debug('!wani stopping at %s.' % end_time.isoformat())
             logger.debug('!wani took %s' % str(end_time - start_time))
