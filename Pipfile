@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 "discord.py" = {git = "https://github.com/Rapptz/discord.py.git", ref = "rewrite"}
+pyyaml = "*"
 
 [dev-packages]
 
