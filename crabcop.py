@@ -16,9 +16,9 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 # Load shelves
-registrants = shelve.open('registrants.shelf')
-channels = shelve.open('channels.shelf')
-users = shelve.open('users.shelf')
+registrants = shelve.open('registrants.shelf.db')
+channels = shelve.open('channels.shelf.db')
+users = shelve.open('users.shelf.db')
 
 def rankKeyFunction(user):
     return (user['reviews_done_past_day'], user['current_level'])
