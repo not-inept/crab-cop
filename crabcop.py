@@ -72,6 +72,8 @@ async def on_message(message):
     author_id = str(message.author.id)
     channel_id = str(message.channel.id)
     if message.content.startswith('!wani'):
+        logger.debug('Got a !wani, Channel ID is seen as %s' % channel_id)
+        logger.debug('Valid channel IDs are: %s' % ','.join(channels.keys()))
         if channel_id in channels:
             start_time = datetime.now()
             logger.debug('!wani starting at %s.' % start_time.isoformat())
