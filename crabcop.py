@@ -54,6 +54,8 @@ def registerWithChannel(channel_id, user_id):
         channels[channel_id] = channel
         user['channels'].append(channel_id)
         users[user_id] = user
+    channels.sync()
+    users.sync()
 
 def registerUser(user_obj, token):
     user = {
@@ -63,6 +65,7 @@ def registerUser(user_obj, token):
         'data': {}
     }
     users[str(user_obj.id)] = user
+    users.sync()
 
 @client.event
 async def on_ready():
@@ -145,6 +148,7 @@ async def on_message(message):
             response = await message.channel.send(
             'Please finish your registration by responding to the private message I\'m about to send you.')
             registrants[author_id] = (author_id, channel_id, message.channel.id, response.id)
+            registrants.sync()
             await message.author.send('Please respond with `!token <api v2 token>` to add your WaniKani token to my list. You can your token at: https://www.wanikani.com/settings/account')
             await response.edit(content='Please finish your registration by responding to the private message I just sent you.')
     elif message.content.startswith('!token') and isinstance(message.channel, discord.abc.PrivateChannel):
@@ -166,11 +170,13 @@ async def on_message(message):
             await original_response.edit(content='Thanks for registering!')
             await message.author.send('You\'re able to update your token by messaging me with `!token <api v2 token>` again.')
             del registrants[author_id]
+            registrants.sync()
         elif author_id in users:
             response = await message.channel.send('Thanks, I\'m updating your token...')
             user = users[author_id]
             user['token'] = token
             users[author_id] = user
+            users.sync()
             await response.edit(content='Your token was updated!')
     # Add a thread that checks automatically and says nice things if stuff improves
 
