@@ -16,9 +16,13 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 # Load shelves
-registrants = shelve.open('registrants.shelf.db')
-channels = shelve.open('channels.shelf.db')
-users = shelve.open('users.shelf.db')
+registrants = shelve.open('registrants.shelf')
+channels = shelve.open('channels.shelf')
+users = shelve.open('users.shelf')
+
+# Setup discord client
+config = yaml.load(open('config.yml'))
+client = discord.Client()
 
 def rankKeyFunction(user):
     return (user['reviews_done_past_day'], user['current_level'])
@@ -37,15 +41,19 @@ def buildResponse(user, current_level, reviews_done_past_day, stats, lessons_ava
     return response
 
 def registerWithChannel(channel_id, user_id):
-        channel = []
-        if channel_id in channels:
-            channel = channels[channel_id]
-        if user_id not in channel:
-            user = users[user_id]
-            channel.append(user_id)
-            channels[channel_id] = channel
-            user['channels'].append(channel_id)
-            users[user_id] = user
+    global channels 
+    global users
+    channel = []
+    if channel_id in channels:
+        logger.debug('Existing channel found: %s' % channel_id)
+        channel = channels[channel_id]
+    if user_id not in channel:
+        logger.debug('User (%s) to be added to channel: %s' % (user_id, channel_id))
+        user = users[user_id]
+        channel.append(user_id)
+        channels[channel_id] = channel
+        user['channels'].append(channel_id)
+        users[user_id] = user
 
 def registerUser(user_obj, token):
     user = {
@@ -56,10 +64,6 @@ def registerUser(user_obj, token):
     }
     users[str(user_obj.id)] = user
 
-config = yaml.load(open('config.yml'))
-
-client = discord.Client()
-
 @client.event
 async def on_ready():
     print('Logged in as')
@@ -69,6 +73,9 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    global channels
+    global users
+    global registrants
     author_id = str(message.author.id)
     channel_id = str(message.channel.id)
     if message.content.startswith('!wani'):
@@ -124,7 +131,7 @@ async def on_message(message):
                     'response': buildResponse(user, current_level, reviews_done_past_day, stats, lessons_available, reviews_available, reviews_available_next_day)
                 })
             responses = sorted(responses, key=rankKeyFunction, reverse=True)
-            await message.channel.send('\n' + '\n'.join([str(i+1) + '. ' + responses[i]['response'] for i in range(len(responses))]))
+            await message.channel.send('Here\'s the report:\n' + '\n'.join([str(i+1) + '. ' + responses[i]['response'] for i in range(len(responses))]))
             end_time = datetime.now()
             logger.debug('!wani stopping at %s.' % end_time.isoformat())
             logger.debug('!wani took %s' % str(end_time - start_time))
